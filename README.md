@@ -42,7 +42,7 @@ cd ..
 
 ```env
 ELEVENLABS_API_KEY=
-ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+ELEVENLABS_VOICE_ID=pNInz6obpgDQGcFmaJgB
 ELEVENLABS_STT_MODEL_ID=scribe_v2_realtime
 ELEVENLABS_TTS_MODEL_ID=eleven_flash_v2_5
 
@@ -57,7 +57,7 @@ DATABASE_PATH=./data/appointments.db
 
 Never commit `backend/.env` or any key. The repository `.gitignore` already excludes it.
 
-ElevenLabs note: premade/library voices require a paid ElevenLabs plan for API text-to-speech. If TTS returns `paid_plan_required`, upgrade the account or use a key with API TTS access. Realtime STT works with free-tier keys.
+ElevenLabs note: some newer/default premade voices, such as Rachel and Elli, can return `paid_plan_required` on free accounts. The configured default is Adam, a legacy premade voice that works with free-tier API keys; Antoni also works. If you change the voice and see a 402, switch back to Adam or Antoni. Realtime STT works with free-tier keys.
 
 ## Run locally
 

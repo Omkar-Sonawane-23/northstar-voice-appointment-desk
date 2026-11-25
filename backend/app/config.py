@@ -17,7 +17,7 @@ load_dotenv(BACKEND_DIR / ".env", override=True)
 @dataclass(frozen=True)
 class Settings:
     elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
-    elevenlabs_voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+    elevenlabs_voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB")
     elevenlabs_stt_model: str = os.getenv("ELEVENLABS_STT_MODEL_ID", "scribe_v2_realtime")
     elevenlabs_tts_model: str = os.getenv("ELEVENLABS_TTS_MODEL_ID", "eleven_flash_v2_5")
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
