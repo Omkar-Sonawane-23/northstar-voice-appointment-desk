@@ -117,6 +117,14 @@ function vibrate(pattern: number | number[]): void {
   }
 }
 
+function resetAudio(audio: HTMLAudioElement): void {
+  try {
+    audio.currentTime = 0;
+  } catch {
+    // Some browsers reject seeking before metadata is loaded; it is harmless.
+  }
+}
+
 function primeAudio(audio: HTMLAudioElement): void {
   const originalVolume = audio.volume;
   audio.volume = 0;
@@ -124,7 +132,7 @@ function primeAudio(audio: HTMLAudioElement): void {
     .play()
     .then(() => {
       audio.pause();
-      audio.currentTime = 0;
+      resetAudio(audio);
       audio.volume = originalVolume;
     })
     .catch(() => {
@@ -142,7 +150,7 @@ export function playTone(tone: Tone): void {
 
   audio.loop = false;
   audio.pause();
-  audio.currentTime = 0;
+  resetAudio(audio);
   void audio.play().catch(() => undefined);
 }
 
@@ -160,7 +168,7 @@ export function startRing(): void {
   if (!ring) return;
 
   ring.loop = true;
-  ring.currentTime = 0;
+  resetAudio(ring);
   void ring.play().catch(() => undefined);
 
   // Retry only if the browser blocked the first play.
@@ -178,6 +186,6 @@ export function stopRing(): void {
   const ring = audioCache.get("ring");
   if (ring) {
     ring.pause();
-    ring.currentTime = 0;
+    resetAudio(ring);
   }
 }
