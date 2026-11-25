@@ -4,7 +4,7 @@ A browser-based voice desk that lets a caller check doctor availability, book an
 
 ## What is included
 
-- **Voice pipeline:** Pipecat 1.17.0 with ElevenLabs realtime STT, ElevenLabs TTS, Google Gemini LLM, and Silero VAD.
+- **Voice pipeline:** Pipecat 1.17.0 with ElevenLabs realtime STT, ElevenLabs TTS, OpenRouter LLM, and Silero VAD.
 - **Browser calling:** `SmallWebRTCTransport` + `@pipecat-ai/client-js`. No phone line or third-party dialler is needed.
 - **Frontend:** React 19 + Vite 8 + TypeScript, hand-written CSS, phone-style call UI.
 - **Storage:** SQLite (`backend/data/appointments.db`) shared by the voice tools and the dashboard API.
@@ -12,15 +12,15 @@ A browser-based voice desk that lets a caller check doctor availability, book an
 
 ## Chosen LLM
 
-`gemini-2.0-flash` through Pipecat's `GoogleLLMService`. Change `GEMINI_MODEL` in `.env` if you want to use another Gemini model.
+`openai/gpt-4o-mini` through **OpenRouter**, using Pipecat's OpenAI-compatible `OpenAILLMService`. Change `OPENROUTER_MODEL` in `.env` to any other tool-calling model available on your OpenRouter account. Your OpenRouter key needs credits and access to that model.
 
 ## Pipeline in one paragraph
 
-The browser sends microphone audio over WebRTC to the Pipecat runner. `ElevenLabsRealtimeSTTService` transcribes it, `SileroVADAnalyzer` handles turn-taking, and `GoogleLLMService` drives the conversation with direct function tools: `check_doctor_availability`, `set_caller_phone`, `confirm_caller_phone`, `check_caller_appointments`, `book_appointment`, and `cancel_appointment`. Tool results are written to SQLite, and RTVI server messages (`caller_confirmed`, `appointment_created`, `appointment_cancelled`) push updates into the React UI.
+The browser sends microphone audio over WebRTC to the Pipecat runner. `ElevenLabsRealtimeSTTService` transcribes it, `SileroVADAnalyzer` handles turn-taking, and `OpenAILLMService` drives the conversation through OpenRouter with direct function tools: `check_doctor_availability`, `set_caller_phone`, `confirm_caller_phone`, `check_caller_appointments`, `book_appointment`, and `cancel_appointment`. Tool results are written to SQLite, and RTVI server messages (`caller_confirmed`, `appointment_created`, `appointment_cancelled`) push updates into the React UI.
 
 ## Setup
 
-Requirements: Python 3.12+, Node 22+, an ElevenLabs API key, and a Google Gemini API key.
+Requirements: Python 3.12+, Node 22+, an ElevenLabs API key, and an OpenRouter API key.
 
 ```powershell
 # 1. Install backend dependencies
@@ -46,13 +46,18 @@ ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 ELEVENLABS_STT_MODEL_ID=scribe_v2_realtime
 ELEVENLABS_TTS_MODEL_ID=eleven_flash_v2_5
 
-GOOGLE_API_KEY=
-GEMINI_MODEL=gemini-2.0-flash
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_SITE_URL=http://localhost:5173
+OPENROUTER_APP_NAME=Northstar Voice Desk
 
 DATABASE_PATH=./data/appointments.db
 ```
 
 Never commit `backend/.env` or any key. The repository `.gitignore` already excludes it.
+
+ElevenLabs note: premade/library voices require a paid ElevenLabs plan for API text-to-speech. If TTS returns `paid_plan_required`, upgrade the account or use a key with API TTS access. Realtime STT works with free-tier keys.
 
 ## Run locally
 

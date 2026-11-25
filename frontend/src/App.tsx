@@ -84,7 +84,7 @@ export default function App() {
 
         <footer className="workspace-foot">
           <span>{loading ? "Syncing..." : "All systems synced"}</span>
-          <span>Pipecat · ElevenLabs · Gemini</span>
+          <span>Pipecat · ElevenLabs · OpenRouter</span>
         </footer>
       </main>
 

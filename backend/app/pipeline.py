@@ -11,7 +11,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
 )
 from pipecat.services.elevenlabs.stt import CommitStrategy, ElevenLabsRealtimeSTTService
 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-from pipecat.services.google.llm import GoogleLLMService
+from pipecat.services.openai.llm import OpenAILLMService
 
 from .config import settings
 from .models import AppResources, CallState
@@ -45,7 +45,7 @@ Style: warm, direct, and professional. No markdown, no bullets, no emoji, no lon
 
 
 async def run_pipeline(transport, state: CallState, runner_args) -> None:
-    settings.require_voice_keys()
+    settings.require_keys()
 
     stt = ElevenLabsRealtimeSTTService(
         api_key=settings.elevenlabs_api_key,
@@ -56,10 +56,18 @@ async def run_pipeline(transport, state: CallState, runner_args) -> None:
         ),
     )
 
-    llm = GoogleLLMService(
-        api_key=settings.google_api_key,
-        settings=GoogleLLMService.Settings(
-            model=settings.gemini_model,
+    openrouter_headers: dict[str, str] = {}
+    if settings.openrouter_site_url:
+        openrouter_headers["HTTP-Referer"] = settings.openrouter_site_url
+    if settings.openrouter_app_name:
+        openrouter_headers["X-Title"] = settings.openrouter_app_name
+
+    llm = OpenAILLMService(
+        api_key=settings.openrouter_api_key,
+        base_url=settings.openrouter_base_url,
+        default_headers=openrouter_headers or None,
+        settings=OpenAILLMService.Settings(
+            model=settings.openrouter_model,
             system_instruction=SYSTEM_PROMPT,
             temperature=0.4,
             max_tokens=512,
@@ -112,7 +120,7 @@ async def run_pipeline(transport, state: CallState, runner_args) -> None:
                 "Start by asking the caller to say the phone number they want to use. "
                 "Do not mention that this is a pre-call number."
             )
-        context.add_message({"role": "developer", "content": instruction})
+        context.add_message({"role": "user", "content": instruction})
         await worker.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
