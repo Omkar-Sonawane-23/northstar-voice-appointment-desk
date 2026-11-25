@@ -2,6 +2,7 @@
 .env
 backend/.env
 *.key
+frontend/certs/
 
 # Python
 __pycache__/

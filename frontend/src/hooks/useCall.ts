@@ -17,14 +17,23 @@ type Options = {
 };
 
 function errorMessage(value: unknown): string {
+  let message = "Could not start the call. Check the backend and try again.";
+
   if (value && typeof value === "object") {
     const data = "data" in value ? (value as { data?: unknown }).data : value;
     if (data && typeof data === "object" && "error" in data) {
-      return String((data as { error: unknown }).error);
+      message = String((data as { error: unknown }).error);
+    } else if ("message" in value) {
+      message = String((value as { message: unknown }).message);
     }
-    if ("message" in value) return String((value as { message: unknown }).message);
+  } else if (typeof value === "string" && value) {
+    message = value;
   }
-  return "Could not start the call. Check the backend and try again.";
+
+  if (/not supported or suppressed|secure context|mediagroup|mediaDevices/i.test(message)) {
+    return "Microphone access needs HTTPS. On your phone, open the https:// address and accept the certificate warning, then try again.";
+  }
+  return message;
 }
 
 export function useCall({ onEvent }: Options = {}) {
@@ -131,53 +140,57 @@ export function useCall({ onEvent }: Options = {}) {
         connectTimeoutRef.current = window.setTimeout(() => {
           connectTimeoutRef.current = null;
           if (startId !== startIdRef.current) return;
-          setError("Connection timed out. Check that the backend is running and try again.");
+          setError(
+            window.location.hostname === "localhost"
+              ? "Connection timed out. Check that the backend is running and try again."
+              : "Connection timed out. On a phone, open the https:// address and accept the certificate warning.",
+          );
           setStatus("error");
           stopTimer();
           void clientRef.current?.disconnect();
         }, 20000);
 
-        const client = createClient({
-          onBotReady: () => {
-            if (startId !== startIdRef.current) return;
-            clearConnectTimeout();
-            setStatus("connected");
-            startTimer();
-            playTone("connect");
-          },
-          onDisconnected: () => {
-            if (startId !== startIdRef.current) return;
-            clearConnectTimeout();
-            stopTimer();
-            setStatus("ended");
-            playTone("end");
-          },
-          onError: (message) => {
-            if (startId !== startIdRef.current) return;
-            clearConnectTimeout();
-            setError(errorMessage(message));
-            setStatus("error");
-            stopTimer();
-          },
-        });
-
-        clientRef.current = client;
-
-        client.on(RTVIEvent.UserInput, (data) => {
-          if (data.final) appendLine("user", data.text);
-        });
-        client.on(RTVIEvent.BotOutput, (data) => {
-          if (data.output_type !== "token") appendLine("agent", data.text);
-        });
-        client.on(RTVIEvent.ServerMessage, handleServerMessage);
-        client.on(RTVIEvent.LocalAudioLevel, (level) => {
-          setLevels((value) => ({ ...value, local: level }));
-        });
-        client.on(RTVIEvent.RemoteAudioLevel, (level) => {
-          setLevels((value) => ({ ...value, remote: level }));
-        });
-
         try {
+          const client = createClient({
+            onBotReady: () => {
+              if (startId !== startIdRef.current) return;
+              clearConnectTimeout();
+              setStatus("connected");
+              startTimer();
+              playTone("connect");
+            },
+            onDisconnected: () => {
+              if (startId !== startIdRef.current) return;
+              clearConnectTimeout();
+              stopTimer();
+              setStatus("ended");
+              playTone("end");
+            },
+            onError: (message) => {
+              if (startId !== startIdRef.current) return;
+              clearConnectTimeout();
+              setError(errorMessage(message));
+              setStatus("error");
+              stopTimer();
+            },
+          });
+
+          clientRef.current = client;
+
+          client.on(RTVIEvent.UserInput, (data) => {
+            if (data.final) appendLine("user", data.text);
+          });
+          client.on(RTVIEvent.BotOutput, (data) => {
+            if (data.output_type !== "token") appendLine("agent", data.text);
+          });
+          client.on(RTVIEvent.ServerMessage, handleServerMessage);
+          client.on(RTVIEvent.LocalAudioLevel, (level) => {
+            setLevels((value) => ({ ...value, local: level }));
+          });
+          client.on(RTVIEvent.RemoteAudioLevel, (level) => {
+            setLevels((value) => ({ ...value, remote: level }));
+          });
+
           await client.startBotAndConnect({
             endpoint: "/start",
             requestData: {

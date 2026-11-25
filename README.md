@@ -67,21 +67,26 @@ Terminal 1 — backend:
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 cd backend
-.\.venv\Scripts\python bot.py -t webrtc --allowed-origins http://localhost:5173
+.\.venv\Scripts\python bot.py -t webrtc
 ```
 
 Terminal 2 — frontend:
 
 ```powershell
 cd frontend
+npm run certs
 npm run dev
 ```
 
-Open **http://localhost:5173**, click **Try Call**, enter a caller number, then click **Continue to call**. Allow microphone access when the browser asks.
+`npm run certs` creates a local self-signed certificate in `frontend/certs/` (gitignored). Vite enables HTTPS automatically when those files exist.
 
-The Vite dev server proxies `/api`, `/start`, and `/sessions` to the Pipecat runner on port `7860`. WebRTC requires HTTPS in production; `localhost` is allowed for this local demo.
+Open **https://localhost:5173**, accept the certificate warning once, click **Try Call**, enter a caller number, then click **Continue to call**. Allow microphone access when the browser asks. `npm run dev` also works without the certificate on desktop, where `http://localhost:5173` is a secure context.
 
-For a phone on the same Wi-Fi, use the LAN address shown by Vite instead of `localhost`, for example `http://192.168.1.20:5173`, and allow Node through Windows Firewall. The frontend now binds to all interfaces so the phone can reach it. If the call cannot connect, the phone screen shows a timeout error after 20 seconds instead of staying on "Connecting".
+The Vite dev server proxies `/api`, `/start`, and `/sessions` to the Pipecat runner on port `7860`.
+
+For a phone on the same Wi-Fi, use the LAN address shown by Vite with **https**, for example `https://172.27.39.122:5173`, and allow Node through Windows Firewall. Tap **Advanced → Proceed** on the certificate warning. Browsers only expose the microphone and WebRTC in a secure context, so plain `http://<LAN-IP>:5173` cannot start a call; the app now shows a clear HTTPS error instead of hanging on "Connecting".
+
+Optional: if the phone is not on the same Wi-Fi or the firewall blocks it, expose the dev server with a free HTTPS tunnel such as `cloudflared tunnel --no-tls-verify --url https://localhost:5173` and open the generated `https://*.trycloudflare.com` address on the phone.
 
 ## Demo script (under 3 minutes)
 
