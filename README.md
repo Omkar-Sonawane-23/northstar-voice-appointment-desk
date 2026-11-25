@@ -84,7 +84,7 @@ Open **https://localhost:5173**, accept the certificate warning once, click **Tr
 
 The Vite dev server proxies `/api`, `/start`, and `/sessions` to the Pipecat runner on port `7860`.
 
-For a phone on the same Wi-Fi, use the LAN address shown by Vite with **https**, for example `https://172.27.39.122:5173`, and allow Node through Windows Firewall. Tap **Advanced → Proceed** on the certificate warning. Browsers only expose the microphone and WebRTC in a secure context, so plain `http://<LAN-IP>:5173` cannot start a call; the app now shows a clear HTTPS error instead of hanging on "Connecting".
+For a phone on the same Wi-Fi, use the LAN address shown by Vite with **https**, for example `https://192.168.1.33:5173`, and allow Node through Windows Firewall. Tap **Advanced → Proceed** on the certificate warning. If your computer's LAN IP changes, run `npm run certs` again and restart Vite so the certificate includes the new address. Browsers only expose the microphone and WebRTC in a secure context, so plain `http://<LAN-IP>:5173` cannot start a call; the app now shows a clear HTTPS error instead of hanging on "Connecting".
 
 Optional: if the phone is not on the same Wi-Fi or the firewall blocks it, expose the dev server with a free HTTPS tunnel such as `cloudflared tunnel --no-tls-verify --url https://localhost:5173` and open the generated `https://*.trycloudflare.com` address on the phone.
 
