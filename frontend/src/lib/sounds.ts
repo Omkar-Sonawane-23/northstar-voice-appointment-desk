@@ -117,6 +117,21 @@ function vibrate(pattern: number | number[]): void {
   }
 }
 
+function primeAudio(audio: HTMLAudioElement): void {
+  const originalVolume = audio.volume;
+  audio.volume = 0;
+  void audio
+    .play()
+    .then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = originalVolume;
+    })
+    .catch(() => {
+      audio.volume = originalVolume;
+    });
+}
+
 export function playTone(tone: Tone): void {
   if (tone === "ring") vibrate([90, 120, 90]);
   else if (tone === "connect") vibrate(60);
@@ -134,10 +149,12 @@ export function playTone(tone: Tone): void {
 export function startRing(): void {
   stopRing();
 
-  // Create the one-shot tones during the button gesture so mobile browsers
+  // Unlock the one-shot tones during the button gesture so mobile browsers
   // allow them to play later when the call connects or ends.
-  getAudio("connect")?.load();
-  getAudio("end")?.load();
+  const connect = getAudio("connect");
+  const end = getAudio("end");
+  if (connect) primeAudio(connect);
+  if (end) primeAudio(end);
 
   const ring = getAudio("ring");
   if (!ring) return;
