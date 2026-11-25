@@ -57,6 +57,7 @@ export function PhoneScreen({ call, onClose }: Props) {
         <div className="call-identity">
           <div className="call-name">Voice Desk</div>
           <div className={`call-number ${call.verifiedPhone ? "verified" : ""}`}>
+            {call.callerName ? `${call.callerName} · ` : ""}
             {call.verifiedPhone
               ? `Verified ${call.verifiedPhone}`
               : `Calling as ${call.proposedPhone ?? "your number"} · unconfirmed`}

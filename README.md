@@ -9,6 +9,7 @@ A browser-based voice desk that lets a caller check doctor availability, book an
 - **Frontend:** React 19 + Vite 8 + TypeScript, hand-written CSS, phone-style call UI.
 - **Storage:** SQLite (`backend/data/appointments.db`) shared by the voice tools and the dashboard API.
 - **Identity rule:** A number typed before the call is only a proposal. Tools refuse to book or cancel until `confirm_caller_phone()` runs after an explicit verbal "yes".
+- **Caller details:** After the phone is confirmed, Ava asks for the caller's full name and reason for the visit. Tools refuse to book until `set_caller_details()` has recorded both.
 
 ## Chosen LLM
 
@@ -16,7 +17,7 @@ A browser-based voice desk that lets a caller check doctor availability, book an
 
 ## Pipeline in one paragraph
 
-The browser sends microphone audio over WebRTC to the Pipecat runner. `ElevenLabsRealtimeSTTService` transcribes it, `SileroVADAnalyzer` handles turn-taking, and `OpenAILLMService` drives the conversation through OpenRouter with direct function tools: `check_doctor_availability`, `set_caller_phone`, `confirm_caller_phone`, `check_caller_appointments`, `book_appointment`, and `cancel_appointment`. Tool results are written to SQLite, and RTVI server messages (`caller_confirmed`, `appointment_created`, `appointment_cancelled`) push updates into the React UI.
+The browser sends microphone audio over WebRTC to the Pipecat runner. `ElevenLabsRealtimeSTTService` transcribes it, `SileroVADAnalyzer` handles turn-taking, and `OpenAILLMService` drives the conversation through OpenRouter with direct function tools: `check_doctor_availability`, `set_caller_phone`, `confirm_caller_phone`, `set_caller_details`, `check_caller_appointments`, `book_appointment`, and `cancel_appointment`. Tool results are written to SQLite, and RTVI server messages (`caller_confirmed`, `caller_details`, `appointment_created`, `appointment_cancelled`) push updates into the React UI.
 
 ## Setup
 
@@ -92,10 +93,11 @@ Optional: if the phone is not on the same Wi-Fi or the firewall blocks it, expos
 
 1. Click **Try Call** and enter `+1 (415) 555-0132`.
 2. The agent reads the number back. Say **"Yes, that's correct."**
-3. Say **"Check availability for tomorrow."** Pick a time from what the agent reads out.
-4. Say **"Book the 10:30 slot."** Watch the dashboard row and confirmation card update.
-5. Say **"Cancel my appointment."** Watch the row change to cancelled.
-6. Click **End** and show the call summary: duration, booked count, cancelled count.
+3. When asked, say **"Jordan Lee"** and **"Annual checkup."**
+4. Say **"Check availability for tomorrow."** Pick a time from what the agent reads out.
+5. Say **"Book the 10:30 slot."** Watch the dashboard row and confirmation card update with the name and reason.
+6. Say **"Cancel my appointment."** Watch the row change to cancelled.
+7. Click **End** and show the call summary: duration, booked count, cancelled count.
 
 If you say the number is wrong, say **"No, use 415 555 0199"** instead. The agent reads the new number back and asks again before any booking or cancellation is allowed.
 
@@ -117,7 +119,7 @@ cd backend
 .\.venv\Scripts\python -m pytest -q
 ```
 
-The tests cover phone normalization, typed-number-without-confirmation rejection, booking after confirmation, slot removal, and double-cancel protection.
+The tests cover phone normalization, typed-number-without-confirmation rejection, caller name and reason capture, booking after confirmation, slot removal, and double-cancel protection.
 
 ## Windows note
 

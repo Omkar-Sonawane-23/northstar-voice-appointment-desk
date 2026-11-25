@@ -24,6 +24,8 @@ export type Appointment = {
   time: string;
   phone: string;
   formattedPhone: string;
+  patientName: string;
+  reason: string;
   status: "confirmed" | "cancelled";
   createdAt: string;
 };
@@ -51,9 +53,15 @@ export type TranscriptLine = {
 };
 
 export type ServerEvent = {
-  type: "caller_confirmed" | "appointment_created" | "appointment_cancelled";
+  type:
+    | "caller_confirmed"
+    | "caller_details"
+    | "appointment_created"
+    | "appointment_cancelled";
   phone?: string;
   formattedPhone?: string;
+  name?: string;
+  reason?: string;
   appointment?: Appointment;
 };
 

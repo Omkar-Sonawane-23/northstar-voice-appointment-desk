@@ -1,76 +1,166 @@
 type Tone = "ring" | "connect" | "end";
 
-declare global {
-  interface Window {
-    webkitAudioContext?: typeof AudioContext;
+type Blip = {
+  frequency: number;
+  start: number;
+  duration: number;
+  gain: number;
+};
+
+const SAMPLE_RATE = 24000;
+
+const TONES: Record<Tone, { duration: number; blips: Blip[] }> = {
+  ring: {
+    duration: 0.86,
+    blips: [
+      { frequency: 660, start: 0.0, duration: 0.16, gain: 0.45 },
+      { frequency: 880, start: 0.22, duration: 0.16, gain: 0.45 },
+      { frequency: 660, start: 0.48, duration: 0.16, gain: 0.45 },
+    ],
+  },
+  connect: {
+    duration: 0.42,
+    blips: [
+      { frequency: 520, start: 0.0, duration: 0.12, gain: 0.38 },
+      { frequency: 780, start: 0.14, duration: 0.22, gain: 0.38 },
+    ],
+  },
+  end: {
+    duration: 0.44,
+    blips: [
+      { frequency: 440, start: 0.0, duration: 0.12, gain: 0.36 },
+      { frequency: 300, start: 0.14, duration: 0.24, gain: 0.36 },
+    ],
+  },
+};
+
+let ringTimer: number | null = null;
+const audioCache = new Map<Tone, HTMLAudioElement>();
+const uriCache = new Map<Tone, string>();
+
+function writeAscii(view: DataView, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
   }
 }
 
-let context: AudioContext | null = null;
-let ringTimer: number | null = null;
+function createWavDataUri(tone: Tone): string {
+  const spec = TONES[tone];
+  const sampleCount = Math.floor(spec.duration * SAMPLE_RATE);
+  const buffer = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(buffer);
 
-function getContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-  context ??= new AudioContextClass();
-  return context;
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, SAMPLE_RATE, true);
+  view.setUint32(28, SAMPLE_RATE * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, sampleCount * 2, true);
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const time = index / SAMPLE_RATE;
+    let sample = 0;
+
+    for (const blip of spec.blips) {
+      const local = time - blip.start;
+      if (local < 0 || local >= blip.duration) continue;
+      const attack = Math.min(1, local / 0.015);
+      const release = Math.min(1, (blip.duration - local) / 0.04);
+      const envelope = Math.max(0, Math.min(attack, release));
+      sample +=
+        Math.sin(2 * Math.PI * blip.frequency * local) * blip.gain * envelope;
+    }
+
+    sample = Math.max(-1, Math.min(1, sample));
+    view.setInt16(44 + index * 2, sample * 32767, true);
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  const base64 =
+    typeof btoa === "function" ? btoa(binary) : "";
+  return `data:audio/wav;base64,${base64}`;
 }
 
-function blip(
-  ctx: AudioContext,
-  frequency: number,
-  start: number,
-  duration: number,
-  gain: number,
-) {
-  const oscillator = ctx.createOscillator();
-  const envelope = ctx.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.value = frequency;
-  envelope.gain.setValueAtTime(0, start);
-  envelope.gain.linearRampToValueAtTime(gain, start + 0.02);
-  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(envelope).connect(ctx.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
+function getAudio(tone: Tone): HTMLAudioElement | null {
+  if (typeof Audio === "undefined") return null;
+
+  let audio = audioCache.get(tone);
+  if (!audio) {
+    let source = uriCache.get(tone);
+    if (!source) {
+      source = createWavDataUri(tone);
+      uriCache.set(tone, source);
+    }
+    audio = new Audio(source);
+    audio.preload = "auto";
+    audio.volume = 1;
+    audio.setAttribute("playsinline", "");
+    audioCache.set(tone, audio);
+  }
+  return audio;
 }
 
-function schedule(ctx: AudioContext, tone: Tone) {
-  const now = ctx.currentTime + 0.01;
-
-  if (tone === "ring") {
-    blip(ctx, 660, now, 0.12, 0.08);
-    blip(ctx, 880, now + 0.18, 0.12, 0.08);
-  } else if (tone === "connect") {
-    blip(ctx, 520, now, 0.09, 0.07);
-    blip(ctx, 780, now + 0.1, 0.16, 0.07);
-  } else {
-    blip(ctx, 440, now, 0.1, 0.06);
-    blip(ctx, 300, now + 0.1, 0.16, 0.06);
+function vibrate(pattern: number | number[]): void {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(pattern);
   }
 }
 
 export function playTone(tone: Tone): void {
-  const ctx = getContext();
-  if (!ctx) return;
+  if (tone === "ring") vibrate([90, 120, 90]);
+  else if (tone === "connect") vibrate(60);
+  else vibrate([80, 60, 80]);
 
-  if (ctx.state === "suspended") {
-    void ctx.resume().then(() => schedule(ctx, tone)).catch(() => undefined);
-  } else {
-    schedule(ctx, tone);
-  }
+  const audio = getAudio(tone);
+  if (!audio) return;
+
+  audio.loop = false;
+  audio.pause();
+  audio.currentTime = 0;
+  void audio.play().catch(() => undefined);
 }
 
 export function startRing(): void {
   stopRing();
-  playTone("ring");
-  ringTimer = window.setInterval(() => playTone("ring"), 1100);
+
+  // Create the one-shot tones during the button gesture so mobile browsers
+  // allow them to play later when the call connects or ends.
+  getAudio("connect")?.load();
+  getAudio("end")?.load();
+
+  const ring = getAudio("ring");
+  if (!ring) return;
+
+  ring.loop = true;
+  ring.currentTime = 0;
+  void ring.play().catch(() => undefined);
+
+  // Retry only if the browser blocked the first play.
+  ringTimer = window.setInterval(() => {
+    if (ring.paused) void ring.play().catch(() => undefined);
+  }, 900);
 }
 
 export function stopRing(): void {
   if (ringTimer !== null) {
     window.clearInterval(ringTimer);
     ringTimer = null;
+  }
+
+  const ring = audioCache.get("ring");
+  if (ring) {
+    ring.pause();
+    ring.currentTime = 0;
   }
 }

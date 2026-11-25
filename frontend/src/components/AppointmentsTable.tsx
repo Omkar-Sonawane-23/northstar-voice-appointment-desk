@@ -47,7 +47,10 @@ export function AppointmentsTable({ appointments, flash }: Props) {
                   <td>
                     <span className="caller-cell">
                       <span className="caller-dot" />
-                      {item.formattedPhone}
+                      <span className="caller-lines">
+                        <strong>{item.patientName || item.formattedPhone}</strong>
+                        {item.patientName && <small>{item.formattedPhone}</small>}
+                      </span>
                     </span>
                   </td>
                   <td>{item.doctorName}</td>

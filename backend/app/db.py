@@ -57,6 +57,17 @@ def init_db() -> None:
             )
             """
         )
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(appointments)")
+        }
+        if "patient_name" not in columns:
+            conn.execute(
+                "ALTER TABLE appointments ADD COLUMN patient_name TEXT NOT NULL DEFAULT ''"
+            )
+        if "reason" not in columns:
+            conn.execute(
+                "ALTER TABLE appointments ADD COLUMN reason TEXT NOT NULL DEFAULT ''"
+            )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_appt_phone ON appointments(phone, status)"
         )
@@ -152,13 +163,27 @@ def _row_to_appointment(row: sqlite3.Row) -> Appointment:
         phone=row["phone"],
         status=row["status"],
         created_at=row["created_at"],
+        patient_name=row["patient_name"] or "",
+        reason=row["reason"] or "",
     )
 
 
-def create_appointment(slot_id: str, phone: str) -> Appointment:
+def create_appointment(
+    slot_id: str,
+    phone: str,
+    patient_name: str = "",
+    reason: str = "",
+) -> Appointment:
     slot = get_slot(slot_id)
     if not slot:
         raise ValueError("That slot does not exist.")
+
+    patient_name = " ".join((patient_name or "").split())
+    reason = (reason or "").strip()
+    if not patient_name:
+        raise ValueError("A patient name is required.")
+    if not reason:
+        raise ValueError("A reason for the visit is required.")
 
     now = datetime.now(timezone.utc).isoformat()
     appointment = Appointment(
@@ -171,6 +196,8 @@ def create_appointment(slot_id: str, phone: str) -> Appointment:
         phone=phone,
         status="confirmed",
         created_at=now,
+        patient_name=patient_name,
+        reason=reason,
     )
 
     with _lock, _connect() as conn:
@@ -183,8 +210,9 @@ def create_appointment(slot_id: str, phone: str) -> Appointment:
         conn.execute(
             """
             INSERT INTO appointments
-                (id, doctor_id, doctor_name, slot_id, date, time, phone, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, doctor_id, doctor_name, slot_id, date, time, phone, status, created_at,
+                 patient_name, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 appointment.id,
@@ -196,6 +224,8 @@ def create_appointment(slot_id: str, phone: str) -> Appointment:
                 appointment.phone,
                 appointment.status,
                 appointment.created_at,
+                appointment.patient_name,
+                appointment.reason,
             ),
         )
     return appointment
@@ -246,7 +276,9 @@ def list_appointments(limit: int = 100) -> list[dict]:
 
 
 def appointment_summary(appointment: Appointment) -> str:
+    patient = appointment.patient_name or "the caller"
+    reason = f" for {appointment.reason}" if appointment.reason else ""
     return (
-        f"{appointment.date} at {appointment.time} with "
-        f"{appointment.doctor_name} for {format_phone(appointment.phone)}"
+        f"{patient} — {appointment.date} at {appointment.time} with "
+        f"{appointment.doctor_name}, phone {format_phone(appointment.phone)}{reason}"
     )

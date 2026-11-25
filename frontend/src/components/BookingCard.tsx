@@ -17,6 +17,14 @@ export function BookingCard({ appointment }: Props) {
         <span>
           {formatDate(appointment.date)} · {appointment.time}
         </span>
+        {appointment.patientName && (
+          <span>
+            {appointment.patientName} · {appointment.formattedPhone}
+          </span>
+        )}
+        {appointment.reason && (
+          <span className="booking-reason">Reason: {appointment.reason}</span>
+        )}
       </div>
     </div>
   );

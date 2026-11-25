@@ -349,6 +349,17 @@ tbody tr:hover {
   background: #cbd0d6;
 }
 
+.caller-lines {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.caller-lines small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .when-cell em {
   color: var(--accent);
   font-style: normal;
@@ -973,6 +984,11 @@ tbody tr:hover {
   margin-top: 2px;
   color: var(--accent);
   font-size: 10px;
+}
+
+.booking-card .booking-reason {
+  opacity: 0.8;
+  font-size: 9px;
 }
 
 .call-error {

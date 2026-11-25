@@ -109,6 +109,34 @@ async def confirm_caller_phone(params: FunctionCallParams):
     )
 
 
+async def set_caller_details(params: FunctionCallParams, name: str, reason: str):
+    """Record the caller's full name and reason for the visit.
+
+    Args:
+        name: The caller's full name, spoken out loud.
+        reason: A short reason for the appointment, such as "rash on my arm".
+    """
+    resources = _resources(params)
+    clean_name = " ".join((name or "").split())
+    clean_reason = (reason or "").strip()
+    if not clean_name:
+        await params.result_callback({"ok": False, "error": "Ask the caller for their full name."})
+        return
+    if not clean_reason:
+        await params.result_callback(
+            {"ok": False, "error": "Ask what the appointment is for."}
+        )
+        return
+
+    clean_reason = clean_reason[:160]
+    resources.state.patient_name = clean_name
+    resources.state.reason = clean_reason
+    await _emit(params, "caller_details", name=clean_name, reason=clean_reason)
+    await params.result_callback(
+        {"ok": True, "name": clean_name, "reason": clean_reason}
+    )
+
+
 async def book_appointment(params: FunctionCallParams, slot_id: str):
     """Book an available appointment slot for the confirmed caller.
 
@@ -116,7 +144,8 @@ async def book_appointment(params: FunctionCallParams, slot_id: str):
         slot_id: The slot id returned by check_doctor_availability.
     """
     resources = _resources(params)
-    phone = resources.state.confirmed_phone
+    state = resources.state
+    phone = state.confirmed_phone
     if not phone:
         await params.result_callback(
             {
@@ -126,8 +155,19 @@ async def book_appointment(params: FunctionCallParams, slot_id: str):
         )
         return
 
+    name = (state.patient_name or "").strip()
+    reason = (state.reason or "").strip()
+    if not name or not reason:
+        await params.result_callback(
+            {
+                "ok": False,
+                "error": "Ask for the caller's full name and what the visit is for before booking.",
+            }
+        )
+        return
+
     try:
-        appointment = db.create_appointment(slot_id, phone)
+        appointment = db.create_appointment(slot_id, phone, name, reason)
     except ValueError as exc:
         await params.result_callback({"ok": False, "error": str(exc)})
         return
@@ -236,6 +276,7 @@ TOOLS = (
     check_doctor_availability,
     set_caller_phone,
     confirm_caller_phone,
+    set_caller_details,
     check_caller_appointments,
     book_appointment,
     cancel_appointment,

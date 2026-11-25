@@ -40,6 +40,8 @@ export function useCall({ onEvent }: Options = {}) {
   const [status, setStatus] = useState<CallStatus>("idle");
   const [proposedPhone, setProposedPhone] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
+  const [callerName, setCallerName] = useState<string | null>(null);
+  const [callerReason, setCallerReason] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<AudioLevels>({ local: 0, remote: 0 });
@@ -56,6 +58,7 @@ export function useCall({ onEvent }: Options = {}) {
   const connectTimeoutRef = useRef<number | null>(null);
   const startIdRef = useRef(0);
   const onEventRef = useRef(onEvent);
+  const botOutputSeenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     onEventRef.current = onEvent;
@@ -117,6 +120,10 @@ export function useCall({ onEvent }: Options = {}) {
     if (payload.type === "caller_confirmed") {
       setVerifiedPhone(payload.formattedPhone ?? payload.phone ?? null);
     }
+    if (payload.type === "caller_details") {
+      setCallerName(payload.name ?? null);
+      setCallerReason(payload.reason ?? null);
+    }
     if (payload.type === "appointment_created" && payload.appointment) {
       setConfirmation(payload.appointment);
       setBookedCount((value) => value + 1);
@@ -140,6 +147,9 @@ export function useCall({ onEvent }: Options = {}) {
 
       setProposedPhone(formatPhone(digits));
       setVerifiedPhone(null);
+      setCallerName(null);
+      setCallerReason(null);
+      botOutputSeenRef.current.clear();
       setTranscript([]);
       setConfirmation(null);
       setSeconds(0);
@@ -199,23 +209,42 @@ export function useCall({ onEvent }: Options = {}) {
           clientRef.current = client;
 
           client.on(RTVIEvent.UserInput, (data) => {
+            if (startId !== startIdRef.current) return;
             if (data.final) appendLine("user", data.text);
           });
           client.on(RTVIEvent.BotOutput, (data) => {
-            if (data.output_type !== "token") appendLine("agent", data.text);
+            if (startId !== startIdRef.current) return;
+            if (data.output_type === "token" || data.output_type === "word") return;
+            // RTVI can send the same sentence once as "new" and again as
+            // "completed" after synthesis. Show it only once.
+            if (data.spoken_status && data.spoken_status !== "completed") return;
+            const cleanText = data.text.trim();
+            const key =
+              data.segment_id !== undefined
+                ? `segment:${data.segment_id}:${cleanText}`
+                : `text:${cleanText}`;
+            if (botOutputSeenRef.current.has(key)) return;
+            botOutputSeenRef.current.add(key);
+            appendLine("agent", cleanText);
           });
           client.on(RTVIEvent.TrackStarted, (track, participant) => {
+            if (startId !== startIdRef.current) return;
             if (participant?.local || track.kind !== "audio") return;
             const audio = audioRef.current;
             if (!audio) return;
             audio.srcObject = new MediaStream([track]);
             void audio.play().catch(() => undefined);
           });
-          client.on(RTVIEvent.ServerMessage, handleServerMessage);
+          client.on(RTVIEvent.ServerMessage, (message) => {
+            if (startId !== startIdRef.current) return;
+            handleServerMessage(message);
+          });
           client.on(RTVIEvent.LocalAudioLevel, (level) => {
+            if (startId !== startIdRef.current) return;
             setLevels((value) => ({ ...value, local: level }));
           });
           client.on(RTVIEvent.RemoteAudioLevel, (level) => {
+            if (startId !== startIdRef.current) return;
             setLevels((value) => ({ ...value, remote: level }));
           });
 
@@ -268,6 +297,8 @@ export function useCall({ onEvent }: Options = {}) {
     setError(null);
     setProposedPhone(null);
     setVerifiedPhone(null);
+    setCallerName(null);
+    setCallerReason(null);
     setTranscript([]);
     setConfirmation(null);
     setSeconds(0);
@@ -298,6 +329,8 @@ export function useCall({ onEvent }: Options = {}) {
     status,
     proposedPhone,
     verifiedPhone,
+    callerName,
+    callerReason,
     transcript,
     seconds,
     levels,
