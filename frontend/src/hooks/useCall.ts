@@ -3,7 +3,7 @@ import { RTVIEvent } from "@pipecat-ai/client-js";
 
 import { createClient } from "../lib/client";
 import { formatPhone, normalizePhone } from "../lib/phone";
-import { playTone, stopTone } from "../lib/sounds";
+import { playTone, startRing, stopRing } from "../lib/sounds";
 import type {
   Appointment,
   AudioLevels,
@@ -50,6 +50,7 @@ export function useCall({ onEvent }: Options = {}) {
   const [error, setError] = useState<string | null>(null);
 
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const pendingRef = useRef<number | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
@@ -59,6 +60,21 @@ export function useCall({ onEvent }: Options = {}) {
   useEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
+
+  useEffect(() => {
+    const audio = document.createElement("audio");
+    audio.autoplay = true;
+    audio.setAttribute("playsinline", "");
+    audio.style.display = "none";
+    document.body.appendChild(audio);
+    audioRef.current = audio;
+
+    return () => {
+      audio.srcObject = null;
+      audio.remove();
+      audioRef.current = null;
+    };
+  }, []);
 
   const appendLine = useCallback((role: "user" | "agent", text: string) => {
     const clean = text.trim();
@@ -119,6 +135,7 @@ export function useCall({ onEvent }: Options = {}) {
       if (pendingRef.current !== null) window.clearTimeout(pendingRef.current);
       clearConnectTimeout();
       if (clientRef.current) void clientRef.current.disconnect();
+      if (audioRef.current) audioRef.current.srcObject = null;
       stopTimer();
 
       setProposedPhone(formatPhone(digits));
@@ -130,7 +147,7 @@ export function useCall({ onEvent }: Options = {}) {
       setMuted(false);
       setError(null);
       setStatus("ringing");
-      playTone("ring");
+      startRing();
 
       pendingRef.current = window.setTimeout(async () => {
         pendingRef.current = null;
@@ -155,6 +172,7 @@ export function useCall({ onEvent }: Options = {}) {
             onBotReady: () => {
               if (startId !== startIdRef.current) return;
               clearConnectTimeout();
+              stopRing();
               setStatus("connected");
               startTimer();
               playTone("connect");
@@ -162,13 +180,16 @@ export function useCall({ onEvent }: Options = {}) {
             onDisconnected: () => {
               if (startId !== startIdRef.current) return;
               clearConnectTimeout();
+              stopRing();
               stopTimer();
+              if (audioRef.current) audioRef.current.srcObject = null;
               setStatus("ended");
               playTone("end");
             },
             onError: (message) => {
               if (startId !== startIdRef.current) return;
               clearConnectTimeout();
+              stopRing();
               setError(errorMessage(message));
               setStatus("error");
               stopTimer();
@@ -182,6 +203,13 @@ export function useCall({ onEvent }: Options = {}) {
           });
           client.on(RTVIEvent.BotOutput, (data) => {
             if (data.output_type !== "token") appendLine("agent", data.text);
+          });
+          client.on(RTVIEvent.TrackStarted, (track, participant) => {
+            if (participant?.local || track.kind !== "audio") return;
+            const audio = audioRef.current;
+            if (!audio) return;
+            audio.srcObject = new MediaStream([track]);
+            void audio.play().catch(() => undefined);
           });
           client.on(RTVIEvent.ServerMessage, handleServerMessage);
           client.on(RTVIEvent.LocalAudioLevel, (level) => {
@@ -202,6 +230,7 @@ export function useCall({ onEvent }: Options = {}) {
         } catch (cause) {
           if (startId !== startIdRef.current) return;
           clearConnectTimeout();
+          stopRing();
           setError(errorMessage(cause));
           setStatus("error");
           stopTimer();
@@ -221,8 +250,9 @@ export function useCall({ onEvent }: Options = {}) {
     const client = clientRef.current;
     clientRef.current = null;
     if (client) void client.disconnect();
+    if (audioRef.current) audioRef.current.srcObject = null;
     stopTimer();
-    stopTone();
+    stopRing();
     setStatus("ended");
     playTone("end");
   }, [clearConnectTimeout, stopTimer]);
@@ -258,6 +288,7 @@ export function useCall({ onEvent }: Options = {}) {
       if (pendingRef.current !== null) window.clearTimeout(pendingRef.current);
       if (connectTimeoutRef.current !== null) window.clearTimeout(connectTimeoutRef.current);
       if (timerRef.current !== null) window.clearInterval(timerRef.current);
+      stopRing();
       const client = clientRef.current;
       if (client) void client.disconnect();
     };

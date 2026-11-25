@@ -7,17 +7,23 @@ declare global {
 }
 
 let context: AudioContext | null = null;
+let ringTimer: number | null = null;
 
 function getContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   const AudioContextClass = window.AudioContext ?? window.webkitAudioContext;
   if (!AudioContextClass) return null;
   context ??= new AudioContextClass();
-  if (context.state === "suspended") void context.resume();
   return context;
 }
 
-function blip(ctx: AudioContext, frequency: number, start: number, duration: number, gain: number) {
+function blip(
+  ctx: AudioContext,
+  frequency: number,
+  start: number,
+  duration: number,
+  gain: number,
+) {
   const oscillator = ctx.createOscillator();
   const envelope = ctx.createGain();
   oscillator.type = "sine";
@@ -30,23 +36,41 @@ function blip(ctx: AudioContext, frequency: number, start: number, duration: num
   oscillator.stop(start + duration + 0.02);
 }
 
-export function playTone(tone: Tone): void {
-  const ctx = getContext();
-  if (!ctx) return;
+function schedule(ctx: AudioContext, tone: Tone) {
   const now = ctx.currentTime + 0.01;
 
   if (tone === "ring") {
-    blip(ctx, 660, now, 0.12, 0.05);
-    blip(ctx, 880, now + 0.18, 0.12, 0.05);
+    blip(ctx, 660, now, 0.12, 0.08);
+    blip(ctx, 880, now + 0.18, 0.12, 0.08);
   } else if (tone === "connect") {
-    blip(ctx, 520, now, 0.09, 0.04);
-    blip(ctx, 780, now + 0.1, 0.16, 0.04);
+    blip(ctx, 520, now, 0.09, 0.07);
+    blip(ctx, 780, now + 0.1, 0.16, 0.07);
   } else {
-    blip(ctx, 440, now, 0.1, 0.035);
-    blip(ctx, 300, now + 0.1, 0.16, 0.035);
+    blip(ctx, 440, now, 0.1, 0.06);
+    blip(ctx, 300, now + 0.1, 0.16, 0.06);
   }
 }
 
-export function stopTone(): void {
-  if (context && context.state === "running") void context.suspend();
+export function playTone(tone: Tone): void {
+  const ctx = getContext();
+  if (!ctx) return;
+
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(() => schedule(ctx, tone)).catch(() => undefined);
+  } else {
+    schedule(ctx, tone);
+  }
+}
+
+export function startRing(): void {
+  stopRing();
+  playTone("ring");
+  ringTimer = window.setInterval(() => playTone("ring"), 1100);
+}
+
+export function stopRing(): void {
+  if (ringTimer !== null) {
+    window.clearInterval(ringTimer);
+    ringTimer = null;
+  }
 }
