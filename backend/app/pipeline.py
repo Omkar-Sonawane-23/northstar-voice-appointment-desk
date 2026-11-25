@@ -12,6 +12,8 @@ from pipecat.processors.aggregators.llm_response_universal import (
 from pipecat.services.elevenlabs.stt import CommitStrategy, ElevenLabsRealtimeSTTService
 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.turns.user_stop import SpeechTimeoutUserTurnStopStrategy
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from .config import settings
 from .models import AppResources, CallState
@@ -85,7 +87,12 @@ async def run_pipeline(transport, state: CallState, runner_args) -> None:
     context = LLMContext(tools=list(TOOLS))
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(),
+            user_turn_strategies=UserTurnStrategies(
+                stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=0.8)]
+            ),
+        ),
     )
 
     pipeline = Pipeline(

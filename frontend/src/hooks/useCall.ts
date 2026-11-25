@@ -43,6 +43,7 @@ export function useCall({ onEvent }: Options = {}) {
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null);
   const timerRef = useRef<number | null>(null);
   const pendingRef = useRef<number | null>(null);
+  const connectTimeoutRef = useRef<number | null>(null);
   const startIdRef = useRef(0);
   const onEventRef = useRef(onEvent);
 
@@ -63,6 +64,13 @@ export function useCall({ onEvent }: Options = {}) {
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+  }, []);
+
+  const clearConnectTimeout = useCallback(() => {
+    if (connectTimeoutRef.current !== null) {
+      window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
     }
   }, []);
 
@@ -100,6 +108,7 @@ export function useCall({ onEvent }: Options = {}) {
       const startId = ++startIdRef.current;
 
       if (pendingRef.current !== null) window.clearTimeout(pendingRef.current);
+      clearConnectTimeout();
       if (clientRef.current) void clientRef.current.disconnect();
       stopTimer();
 
@@ -119,21 +128,33 @@ export function useCall({ onEvent }: Options = {}) {
         if (startId !== startIdRef.current) return;
         setStatus("connecting");
 
+        connectTimeoutRef.current = window.setTimeout(() => {
+          connectTimeoutRef.current = null;
+          if (startId !== startIdRef.current) return;
+          setError("Connection timed out. Check that the backend is running and try again.");
+          setStatus("error");
+          stopTimer();
+          void clientRef.current?.disconnect();
+        }, 20000);
+
         const client = createClient({
           onBotReady: () => {
             if (startId !== startIdRef.current) return;
+            clearConnectTimeout();
             setStatus("connected");
             startTimer();
             playTone("connect");
           },
           onDisconnected: () => {
             if (startId !== startIdRef.current) return;
+            clearConnectTimeout();
             stopTimer();
             setStatus("ended");
             playTone("end");
           },
           onError: (message) => {
             if (startId !== startIdRef.current) return;
+            clearConnectTimeout();
             setError(errorMessage(message));
             setStatus("error");
             stopTimer();
@@ -167,13 +188,14 @@ export function useCall({ onEvent }: Options = {}) {
           });
         } catch (cause) {
           if (startId !== startIdRef.current) return;
+          clearConnectTimeout();
           setError(errorMessage(cause));
           setStatus("error");
           stopTimer();
         }
       }, 850);
     },
-    [appendLine, handleServerMessage, startTimer, stopTimer],
+    [appendLine, clearConnectTimeout, handleServerMessage, startTimer, stopTimer],
   );
 
   const end = useCallback(() => {
@@ -182,6 +204,7 @@ export function useCall({ onEvent }: Options = {}) {
       window.clearTimeout(pendingRef.current);
       pendingRef.current = null;
     }
+    clearConnectTimeout();
     const client = clientRef.current;
     clientRef.current = null;
     if (client) void client.disconnect();
@@ -189,7 +212,7 @@ export function useCall({ onEvent }: Options = {}) {
     stopTone();
     setStatus("ended");
     playTone("end");
-  }, [stopTimer]);
+  }, [clearConnectTimeout, stopTimer]);
 
   const open = useCallback(() => {
     setStatus("precall");
@@ -220,6 +243,7 @@ export function useCall({ onEvent }: Options = {}) {
   useEffect(() => {
     return () => {
       if (pendingRef.current !== null) window.clearTimeout(pendingRef.current);
+      if (connectTimeoutRef.current !== null) window.clearTimeout(connectTimeoutRef.current);
       if (timerRef.current !== null) window.clearInterval(timerRef.current);
       const client = clientRef.current;
       if (client) void client.disconnect();

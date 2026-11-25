@@ -64,6 +64,8 @@ ElevenLabs note: some newer/default premade voices, such as Rachel and Elli, can
 Terminal 1 — backend:
 
 ```powershell
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 cd backend
 .\.venv\Scripts\python bot.py -t webrtc --allowed-origins http://localhost:5173
 ```
@@ -78,6 +80,8 @@ npm run dev
 Open **http://localhost:5173**, click **Try Call**, enter a caller number, then click **Continue to call**. Allow microphone access when the browser asks.
 
 The Vite dev server proxies `/api`, `/start`, and `/sessions` to the Pipecat runner on port `7860`. WebRTC requires HTTPS in production; `localhost` is allowed for this local demo.
+
+For a phone on the same Wi-Fi, use the LAN address shown by Vite instead of `localhost`, for example `http://192.168.1.20:5173`, and allow Node through Windows Firewall. The frontend now binds to all interfaces so the phone can reach it. If the call cannot connect, the phone screen shows a timeout error after 20 seconds instead of staying on "Connecting".
 
 ## Demo script (under 3 minutes)
 
